@@ -1,3 +1,5 @@
+import os
+import json
 import time
 from datetime import datetime, timedelta
 from airflow import DAG
@@ -25,7 +27,8 @@ def check_comic_info(**context):
     all_comic_info = context['task_instance'].xcom_pull(task_ids='get_read_history')
     print("去漫畫網站看有沒有新的章節")
 
-    anything_new = time.time() % 2 > 1
+    # anything_new = time.time() % 2 > 1
+    anything_new = True
     return anything_new, all_comic_info
 
 
@@ -38,6 +41,12 @@ def decide_what_to_do(**context):
     else:
         return 'no_do_nothing'
 
+def get_token():
+    file_dir = os.path.dirname(__file__)
+    token_path = os.path.join(file_dir, '../data/credentials/slack.json')
+    with open(token_path, 'r') as fp:
+        token = json.load(fp)['token']
+        return token
 
 def generate_message(**context):
     _, all_comic_info = context['task_instance'].xcom_pull(task_ids='check_comic_info')
@@ -55,31 +64,27 @@ with DAG('comic_app_v2', default_args=default_args) as dag:
     check_comic_info = PythonOperator(
         task_id='check_comic_info',
         python_callable=check_comic_info,
-        provide_context=True
     )
 
     decide_what_to_do = BranchPythonOperator(
         task_id='new_comic_available',
         python_callable=decide_what_to_do,
-        provide_context=True
     )
 
     update_read_history = PythonOperator(
         task_id='update_read_history',
         python_callable=process_metadata,
         op_args=['write'],
-        provide_context=True
     )
 
     generate_notification = PythonOperator(
         task_id='yes_generate_notification',
         python_callable=generate_message,
-        provide_context=True
     )
 
     send_notification = SlackAPIPostOperator(
         task_id='send_notification',
-        token="YOUR_SLACK_TOKEN",
+        token=get_token(),
         channel='#comic-notification',
         text="[{{ ds }}] 海賊王有新番了!",
         icon_url='http://airbnb.io/img/projects/airflow3.png'

@@ -45,7 +45,11 @@ def process_metadata(mode, **context):
 
 def check_comic_info(**context):
     metadata = context['task_instance'].xcom_pull(task_ids='get_read_history')
-    driver = webdriver.Chrome()
+
+    options = webdriver.ChromeOptions()
+    options.headless = True
+    driver = webdriver.Chrome(chrome_options=options,)
+    
     driver.get('https://www.cartoonmad.com/')
     print("Arrived top page.")
 
@@ -129,32 +133,27 @@ with DAG('comic_app_v3', default_args=default_args) as dag:
         task_id='get_read_history',
         python_callable=process_metadata,
         op_args=['read'],
-        provide_context=True
     )
 
     check_comic_info = PythonOperator(
         task_id='check_comic_info',
         python_callable=check_comic_info,
-        provide_context=True
     )
 
     decide_what_to_do = BranchPythonOperator(
         task_id='new_comic_available',
         python_callable=decide_what_to_do,
-        provide_context=True
     )
 
     update_read_history = PythonOperator(
         task_id='update_read_history',
         python_callable=process_metadata,
         op_args=['write'],
-        provide_context=True
     )
 
     generate_notification = PythonOperator(
         task_id='yes_generate_notification',
         python_callable=generate_message,
-        provide_context=True
     )
 
     send_notification = SlackAPIPostOperator(
